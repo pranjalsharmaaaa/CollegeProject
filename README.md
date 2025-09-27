@@ -1,54 +1,92 @@
-# MERN Stack | Login, Register and CRUD app
-Simlple example of user registration, login and CRUD action with backend restAPI using mongoDB, Nodejs(Express.js) and mongoose, authentication using JWT token also pagination and frontend using react.js and material-ui api calling with axios.
+That's the perfect final step. A comprehensive README.md is essential for any professional project. It tells users and evaluators what the project is, how it works, and how to set it up.
 
-[![flow](https://github.com/FSojitra/Registration-Login-and-CRUD-Action-using-MERN-stack/blob/development/MERN.gif)](https://github.com/FSojitra/Registration-Login-and-CRUD-Action-using-MERN-stack/blob/development/MERN.gif)
+Here is a complete README.md template tailored specifically for your EduLens MERN Stack LMS Project. You can copy and paste this into a file named README.md in your root project directory.
 
-### This Project is a Simple ReactJS Project which demonstrates the following
-##### Backend
-- API to register and login user.
-- API using which loged in user can add, edit and update it's product.
-- Pagination API to give list of perticular user's added product.
-- JWT token authentication.
-- Print PDF option so you can print or download product details
+EduLens: MERN Stack Course Management System
+Project Overview
+EduLens is a full-stack Learning Management System (LMS) designed for teachers to securely manage, organize, and deliver curriculum-aligned resources to students. This application demonstrates complex integration between a modern frontend framework (React) and a Node.js API, featuring robust user authentication and dynamic data handling.
 
-##### Frontend
-- Creating a Component in React and creat routing.
-- Using react and material UI created form to login user and can register new user.
-- Product add, edit, delete and pagination also you can search product by name.
-- Making HTTP calls using Axios.
-- Calling multipart api with image upload.
+Key Features Implemented 🚀
+Full-Stack Course Management (CRUD): Teachers can create, view, edit, and delete course units.
 
-### Prerequisites
-Below noted things you need to install to run this project in your system
+Dynamic Syllabus Upload: Supports conditional resource storage, allowing teachers to either upload a PDF/document file or paste/type plain text syllabus content.
 
-- Node.js
-- NPM
-- MongoDB
+Secure Authentication (JWT): Implements JSON Web Token (JWT) based login and registration with bcrypt password hashing for security.
 
-### To Setup
-Clone or download this repository
+External API Integration (YouTube Data API): The "View Resources" page dynamically searches and recommends YouTube videos based on the course's subject and unit title.
 
-1. `cd Registration-and-Login-using-MERN-stack/backend`
-2. `npm install`
-3. `cd Registration-and-Login-using-MERN-stack/frontend`
-4. `npm install`
+Pagination & Search: Efficiently displays course listings with pagination and a full-text search capability across Class, Subject, and Unit Title.
 
-### To Run
-To run node server
-1. `cd Registration-and-Login-using-MERN-stack/backend`
-2. `node server.js`
+File Handling & Cleanup: Uses Multer to manage file uploads and securely deletes files from the server when a course is removed.
 
-To run react frontend
-1. `cd Registration-and-Login-using-MERN-stack/frontend`
-2. `npm start`
+Technical Stack
+Area	Technology	Purpose
+Frontend	React (Class Components)	User Interface and Dynamic Content Rendering.
+Styling	Material-UI (MUI)	Component library for consistent, modern design.
+Routing	React Router DOM v6	Client-side navigation between Login, Register, and Dashboard.
+Backend	Node.js & Express.js	Server environment and routing/API creation.
+Database	MongoDB & Mongoose	Flexible NoSQL database and Object Data Modeling (ODM).
+Security	JWT & bcrypt	Token-based user authentication and password hashing.
 
-<!-- ### Login and Register screen
-[![login](https://github.com/FSojitra/Registration-Login-and-CRUD-Action-using-MERN-stack/blob/master/login.png)](https://github.com/FSojitra/Registration-Login-and-CRUD-Action-using-MERN-stack/blob/master/login.png)[![register](https://github.com/FSojitra/Registration-Login-and-CRUD-Action-using-MERN-stack/blob/master/register.png)](https://github.com/FSojitra/Registration-Login-and-CRUD-Action-using-MERN-stack/blob/master/register.png)
+Export to Sheets
+Setup and Installation Guide
+Follow these steps to get the project running locally on your machine.
 
-### Product Add and Edit screen
-[![add](https://github.com/FSojitra/Registration-Login-and-CRUD-Action-using-MERN-stack/blob/master/add.png)](https://github.com/FSojitra/Registration-Login-and-CRUD-Action-using-MERN-stack/blob/master/add.png)  [![edit](https://github.com/FSojitra/Registration-Login-and-CRUD-Action-using-MERN-stack/blob/master/edit.png)](https://github.com/FSojitra/Registration-Login-and-CRUD-Action-using-MERN-stack/blob/master/edit.png)
+Prerequisites
+You must have the following installed:
 
-### Product Pagination screen
-[![dashboard](https://github.com/FSojitra/Registration-Login-and-CRUD-Action-using-MERN-stack/blob/master/dashboard.png)](https://github.com/FSojitra/Registration-Login-and-CRUD-Action-using-MERN-stack/blob/master/dashboard.png) -->
+Node.js & npm (Node Package Manager)
+
+MongoDB Community Server (running locally on port 27017)
+
+YouTube Data API Key (from Google Cloud Console)
+
+Step 1: Clone the Repository
+Open your terminal or command prompt and clone the project:
+
+Bash
+
+git clone https://github.com/pranjalsharmaaaa/CollegeProject.git
+cd CollegeProject
+Step 2: Configure the API Key
+Open the backend/server.js file and locate the YOUTUBE_API_KEY variable.
+
+JavaScript
+
+// Change this line:
+const YOUTUBE_API_KEY = 'YOUR_API_KEY_HERE';
+
+// To your actual key:
+const YOUTUBE_API_KEY = 'AIzaSyDFjBotODaBr7-N3tQWXbEpWX-WYE7_4yw'; 
+(Note: In a production environment, this key would be stored in a .env file for security, but direct inclusion is fine for a college demo.)
+
+Step 3: Install Dependencies
+You must install dependencies for both the backend server and the frontend application.
+
+Bash
+
+# 1. Install Backend dependencies
+cd backend
+npm install
+
+# 2. Install Frontend dependencies (using the necessary legacy flag)
+cd ../frontend 
+npm install --legacy-peer-deps
+Step 4: Run the Application
+You need to run both servers simultaneously in two separate terminal windows.
+
+Server	Terminal Command	Status
+Backend (API)	cd backend then npm start	Runs on http://localhost:2000
+Frontend (UI)	cd frontend then npm start	Runs on http://localhost:3000
+
+Export to Sheets
+Testing and Initial Use
+Open your browser to http://localhost:3000.
+
+Click Register to create a new user account (e.g., testuser / 123456).
+
+The system will automatically log you in and redirect you to the Teacher Dashboard.
+
+Click "Add Course" to test the conditional file and text submission feature.
 
 ### Do not forget to leave a star! :hugs:
