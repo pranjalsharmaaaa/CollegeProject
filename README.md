@@ -1,7 +1,3 @@
-That's the perfect final step. A comprehensive README.md is essential for any professional project. It tells users and evaluators what the project is, how it works, and how to set it up.
-
-Here is a complete README.md template tailored specifically for your EduLens MERN Stack LMS Project. You can copy and paste this into a file named README.md in your root project directory.
-
 EduLens: MERN Stack Course Management System
 Project Overview
 EduLens is a full-stack Learning Management System (LMS) designed for teachers to securely manage, organize, and deliver curriculum-aligned resources to students. This application demonstrates complex integration between a modern frontend framework (React) and a Node.js API, featuring robust user authentication and dynamic data handling.
