@@ -1,12 +1,11 @@
 var mongoose = require('mongoose');
 var Schema = mongoose.Schema;
 
-// Fix: Declare userSchema properly with 'var' or 'const'
 const userSchema = new Schema({
     username: String,
-    password: String
+    password: String,
+    role: { type: String, enum: ['teacher', 'student'], default: 'teacher' },
+    classCode: String  // NEW: Store teacher's class code
 });
 
-// CRITICAL FIX: Export the model using the built-in Mongoose cache check.
-// This prevents the OverwriteModelError when Nodemon restarts.
-module.exports = mongoose.models.user || mongoose.model('user', userSchema);
+module.exports = mongoose.models.user || mongoose.model('user', userSchema);    

@@ -18,12 +18,11 @@ class CourseDetail extends Component {
       recommendedVideos: [],
       loadingVideos: false,
       selectedTopic: null,
-      // New states for features
-      videoFilter: 'all', // 'all', 'free', 'paid'
-      selectedVideos: [], // Array to store selected videos
+      videoFilter: 'all',
+      selectedVideos: JSON.parse(localStorage.getItem('selectedVideos') || '[]'),
       showAddTopicDialog: false,
       newTopicName: '',
-      subtopics: [] // Store subtopics for the main topic
+      subtopics: []
     };
   }
 
@@ -55,11 +54,10 @@ class CourseDetail extends Component {
 
       const defaultTopic = this.parseTopicsFromSyllabus(courseData.syllabus_text)[0];
       if (defaultTopic) {
-          this.handleTopicSelect(defaultTopic);
+        this.handleTopicSelect(defaultTopic);
       } else {
-          this.getYouTubeRecommendations(`${courseData.subject_name} ${courseData.unit_title}`);
+        this.getYouTubeRecommendations(`${courseData.subject_name} ${courseData.unit_title}`);
       }
-      
     })
     .catch((err) => {
       swal({
@@ -80,11 +78,10 @@ class CourseDetail extends Component {
       },
     })
     .then(response => {
-      // Add mock pricing info to videos
-      const videosWithPricing = response.data.videos.map((video, index) => ({
+      const videosWithPricing = response.data.videos.map((video) => ({
         ...video,
-        isPaid: index % 3 === 0, // Every 3rd video is "paid"
-        price: index % 3 === 0 ? '$9.99' : 'Free'
+        isPaid: false,
+        price: 'Free'
       }));
 
       this.setState({
@@ -99,36 +96,31 @@ class CourseDetail extends Component {
   };
 
   handleTopicSelect = (topic) => {
-      this.setState({ selectedTopic: topic });
-      this.getYouTubeRecommendations(topic);
+    this.setState({ selectedTopic: topic });
+    this.getYouTubeRecommendations(topic);
   }
 
-  // New function: Filter videos by paid/unpaid
   handleVideoFilter = (filter) => {
     this.setState({ videoFilter: filter });
   }
 
-  // New function: Select/deselect video
   toggleVideoSelection = (video) => {
-    const { selectedVideos } = this.state;
+    const { selectedVideos, selectedTopic } = this.state;
     const isSelected = selectedVideos.some(v => v.videoId === video.videoId);
     
+    let updatedVideos;
     if (isSelected) {
-      // Remove video
-      this.setState({
-        selectedVideos: selectedVideos.filter(v => v.videoId !== video.videoId)
-      });
+      updatedVideos = selectedVideos.filter(v => v.videoId !== video.videoId);
       swal({ text: 'Video removed from selection', icon: 'info' });
     } else {
-      // Add video
-      this.setState({
-        selectedVideos: [...selectedVideos, video]
-      });
+      updatedVideos = [...selectedVideos, { ...video, topic: selectedTopic }];
       swal({ text: 'Video added to selection', icon: 'success' });
     }
+    
+    this.setState({ selectedVideos: updatedVideos });
+    localStorage.setItem('selectedVideos', JSON.stringify(updatedVideos));
   }
 
-  // New function: Add subtopic
   handleAddTopic = () => {
     this.setState({ showAddTopicDialog: true });
   }
@@ -145,20 +137,8 @@ class CourseDetail extends Component {
     }
   }
 
-  // View selected videos
   viewSelectedVideos = () => {
-    const { selectedVideos } = this.state;
-    if (selectedVideos.length === 0) {
-      swal({ text: 'No videos selected yet', icon: 'info' });
-      return;
-    }
-    
-    // For now, just show alert with count
-    swal({ 
-      text: `You have selected ${selectedVideos.length} videos`, 
-      icon: 'success' 
-    });
-    // TODO: Navigate to a separate page or show modal with selected videos
+    this.props.navigate('/selected-videos');
   }
 
   goBack = () => {
@@ -168,14 +148,15 @@ class CourseDetail extends Component {
   parseTopicsFromSyllabus = (syllabusText) => {
     if (!syllabusText) return [];
     
-    const lines = syllabusText.split('\n')
-      .map(line => line.trim())
-      .filter(line => line.length > 3 && !line.startsWith('Unit'));
+    const topics = syllabusText
+      .split(/[\n,]/)
+      .map(topic => topic.trim())
+      .filter(topic => topic.length > 3 && !topic.toLowerCase().startsWith('unit'))
+      .slice(0, 20);
       
-    return lines.slice(0, 8);
+    return topics;
   };
 
-  // Filter videos based on selection
   getFilteredVideos = () => {
     const { recommendedVideos, videoFilter } = this.state;
     
@@ -214,7 +195,6 @@ class CourseDetail extends Component {
             ← Back to Dashboard
           </Button>
           
-          {/* Selected Videos Counter */}
           <div>
             <Button 
               variant="contained" 
@@ -227,7 +207,6 @@ class CourseDetail extends Component {
         </div>
 
         <Grid container spacing={3}>
-          {/* Left Sidebar - Topics */}
           <Grid item xs={12} md={3}>
             <Card>
               <CardContent>
@@ -260,7 +239,6 @@ class CourseDetail extends Component {
                     </React.Fragment>
                   ))}
                   
-                  {/* Display added subtopics */}
                   {subtopics.map((subtopic, index) => (
                     <React.Fragment key={`sub-${index}`}>
                       <ListItem button onClick={() => this.handleTopicSelect(subtopic)}>
@@ -283,9 +261,7 @@ class CourseDetail extends Component {
             </Card>
           </Grid>
 
-          {/* Main Content */}
           <Grid item xs={12} md={9}>
-            {/* Course Header */}
             <Card style={{ marginBottom: '20px' }}>
               <CardContent>
                 <Typography variant="h4" component="h1" gutterBottom>
@@ -297,7 +273,6 @@ class CourseDetail extends Component {
               </CardContent>
             </Card>
 
-            {/* Syllabus Content */}
             <Card style={{ marginBottom: '20px' }}>
               <CardContent>
                 <Typography variant="h6" style={{ marginBottom: '10px' }}>
@@ -324,7 +299,6 @@ class CourseDetail extends Component {
               </CardContent>
             </Card>
 
-            {/* YouTube Recommendations */}
             <Card>
               <CardContent>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
@@ -332,7 +306,6 @@ class CourseDetail extends Component {
                     Recommended Videos for: {displayTopicTitle}
                   </Typography>
                   
-                  {/* Paid/Unpaid Filter */}
                   <ButtonGroup variant="outlined" size="small">
                     <Button 
                       color={videoFilter === 'all' ? 'primary' : 'default'}
@@ -428,7 +401,6 @@ class CourseDetail extends Component {
           </Grid>
         </Grid>
 
-        {/* Add Topic Dialog */}
         <Dialog open={showAddTopicDialog} onClose={() => this.setState({ showAddTopicDialog: false })}>
           <DialogTitle>Add New Subtopic</DialogTitle>
           <DialogContent>

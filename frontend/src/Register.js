@@ -1,9 +1,8 @@
-import React, { Component } from "react";
+import React from "react";
 import swal from "sweetalert";
-import { Button, TextField, Link } from "@material-ui/core";
+import { Button, TextField, Link, Radio, RadioGroup, FormControlLabel, FormControl, FormLabel } from "@material-ui/core";
 import { withRouter } from "./utils";
 import axios from "axios";
-
 
 class Register extends React.Component {
   constructor(props) {
@@ -11,30 +10,39 @@ class Register extends React.Component {
     this.state = {
       username: '',
       password: '',
-      confirm_password: ''
+      confirm_password: '',
+      role: 'teacher'
     };
   }
 
   onChange = (e) => this.setState({ [e.target.name]: e.target.value });
 
+  handleRoleChange = (event) => {
+    this.setState({ role: event.target.value });
+  };
+
   register = () => {
+    if (this.state.password !== this.state.confirm_password) {
+      return swal({
+        text: "Passwords do not match!",
+        icon: "error"
+      });
+    }
 
     axios.post('http://localhost:2000/register', {
       username: this.state.username,
       password: this.state.password,
+      role: this.state.role
     }).then((res) => {
       swal({
-        text: res.data.title,
-        icon: "success",
-        type: "success"
+        text: res.data.message || "Registration successful!",
+        icon: "success"
       });
-      // this.props.history.push('/');
       this.props.navigate("/");
     }).catch((err) => {
       swal({
-        text: err.response.data.errorMessage,
-        icon: "error",
-        type: "error"
+        text: err.response?.data?.errorMessage || "Registration failed!",
+        icon: "error"
       });
     });
   }
@@ -47,8 +55,16 @@ class Register extends React.Component {
         </div>
 
         <div>
+          <FormControl component="fieldset" style={{ marginBottom: "20px" }}>
+            <FormLabel component="legend">Register As:</FormLabel>
+            <RadioGroup row value={this.state.role} onChange={this.handleRoleChange}>
+              <FormControlLabel value="teacher" control={<Radio />} label="Teacher" />
+              <FormControlLabel value="student" control={<Radio />} label="Student" />
+            </RadioGroup>
+          </FormControl>
+          <br />
+
           <TextField
-            id="standard-basic"
             type="text"
             autoComplete="off"
             name="username"
@@ -59,7 +75,6 @@ class Register extends React.Component {
           />
           <br /><br />
           <TextField
-            id="standard-basic"
             type="password"
             autoComplete="off"
             name="password"
@@ -70,7 +85,6 @@ class Register extends React.Component {
           />
           <br /><br />
           <TextField
-            id="standard-basic"
             type="password"
             autoComplete="off"
             name="confirm_password"
@@ -88,15 +102,12 @@ class Register extends React.Component {
             disabled={this.state.username === '' || this.state.password === '' || this.state.confirm_password === ''}
             onClick={this.register}
           >
-            Register
+            Register as {this.state.role === 'teacher' ? 'Teacher' : 'Student'}
           </Button> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
           <Link
-            // href="/"
             component="button"
             style={{ fontFamily: "inherit", fontSize: "inherit" }}
-            onClick={() => {
-              this.props.navigate("/");
-            }}
+            onClick={() => this.props.navigate("/")}
           >
             Login
           </Link>

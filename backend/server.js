@@ -95,17 +95,19 @@ app.get("/", (req, res) => {
 });
 
 /* login api */
+/* login api */
 app.post("/login", async (req, res) => {
   try {
-    if (req.body && req.body.username && req.body.password) {
-      // Use findOne and await
-      const userData = await user.findOne({ username: req.body.username });
+    if (req.body && req.body.username && req.body.password && req.body.role) {
+      const userData = await user.findOne({ 
+        username: req.body.username,
+        role: req.body.role
+      });
       
       if (!userData) { 
-        return res.status(400).json({ errorMessage: 'Username or password is incorrect!', status: false });
+        return res.status(400).json({ errorMessage: 'Username, password, or role is incorrect!', status: false });
       }
       
-      // CRITICAL FIX: Use ASYNCHRONOUS COMPARISON
       const isMatch = await bcrypt.compare(req.body.password, userData.password);
 
       if (isMatch) {
@@ -114,9 +116,11 @@ app.post("/login", async (req, res) => {
         res.status(400).json({ errorMessage: 'Username or password is incorrect!', status: false });
       }
       
-    } else { res.status(400).json({ errorMessage: 'Add proper parameter first!', status: false }); }
+    } else { 
+      res.status(400).json({ errorMessage: 'Add proper parameter first!', status: false }); 
+    }
   } catch (e) { 
-    console.error("Async Login Error:", e); // Log specific error
+    console.error("Async Login Error:", e);
     res.status(400).json({ errorMessage: 'Something went wrong!', status: false }); 
   }
 });
@@ -124,38 +128,36 @@ app.post("/login", async (req, res) => {
 /* register api */
 app.post("/register", async (req, res) => {
   try {
-    // 1. Basic Input Validation
-    if (!req.body || !req.body.username || !req.body.password) {
-      return res.status(400).json({ errorMessage: 'Add proper parameter first!', status: false });
+    if (!req.body || !req.body.username || !req.body.password || !req.body.role) {
+      return res.status(400).json({ errorMessage: 'Username, password, and role are required!', status: false });
     }
 
-    // 2. Check for Existing User (using async/await instead of callback)
-    const existingUser = await user.findOne({ username: req.body.username });
+    const existingUser = await user.findOne({ username: req.body.username, role: req.body.role });
     
     if (existingUser) { 
-      return res.status(400).json({ errorMessage: `UserName ${req.body.username} Already Exist!`, status: false });
+      return res.status(400).json({ errorMessage: `${req.body.role} with username ${req.body.username} already exists!`, status: false });
     }
 
-    // 3. Hash the password securely (async version is better)
     const hashedPassword = await bcrypt.hash(req.body.password, 10);
     
     let newUser = new user({ 
       username: req.body.username, 
-      password: hashedPassword 
+      password: hashedPassword,
+      role: req.body.role
     });
     
-    // 4. Save User and Auto-Login (using async/await instead of callback)
     const savedUser = await newUser.save();
     
-    // Generate token and log the user in immediately
-    checkUserAndGenerateToken(savedUser, req, res); 
+    res.json({
+      message: `${req.body.role} registered successfully!`,
+      status: true
+    });
     
   } catch (e) { 
     console.error("Registration Error:", e);
     return res.status(400).json({ errorMessage: 'Something went wrong!', status: false }); 
   }
 });
-
 
 function checkUserAndGenerateToken(data, req, res) {
   jwt.sign({ user: data.username, id: data._id }, 'shhhhh11111', { expiresIn: '1d' }, (err, token) => {
@@ -432,6 +434,36 @@ app.get("/search-videos/:query", async (req, res) => {
     console.error("YouTube search error:", e);
     res.status(400).json({
       errorMessage: 'Failed to search videos',
+      status: false
+    });
+  }
+});
+
+/* Generate class code for teacher */
+app.post("/generate-class-code", async (req, res) => {
+  try {
+    const teacherId = req.user.id;
+    
+    // Generate a 6-character alphanumeric code
+    const generateCode = () => {
+      return Math.random().toString(36).substring(2, 8).toUpperCase();
+    };
+    
+    const classCode = generateCode();
+    
+    // Store the code in the user document
+    await user.findByIdAndUpdate(teacherId, { classCode: classCode });
+    
+    res.json({
+      status: true,
+      classCode: classCode,
+      message: 'Class code generated successfully'
+    });
+    
+  } catch (e) {
+    console.error("Generate code error:", e);
+    res.status(400).json({
+      errorMessage: 'Failed to generate class code',
       status: false
     });
   }
