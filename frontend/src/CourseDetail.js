@@ -13,6 +13,7 @@ class CourseDetail extends Component {
     super(props);
     this.state = {
       course: null,
+      courseId: null,
       loading: true,
       token: localStorage.getItem("token"),
       recommendedVideos: [],
@@ -29,6 +30,10 @@ class CourseDetail extends Component {
   componentDidMount() {
     const urlParts = window.location.pathname.split('/');
     const courseId = urlParts[urlParts.length - 1]; 
+    
+    // Store courseId in state and localStorage
+    this.setState({ courseId });
+    localStorage.setItem('currentCourseId', courseId);
     
     if (!this.state.token) {
       this.props.navigate("/login");
@@ -138,7 +143,9 @@ class CourseDetail extends Component {
   }
 
   viewSelectedVideos = () => {
-    this.props.navigate('/selected-videos');
+    const { courseId } = this.state;
+    // Pass courseId via navigation state AND localStorage
+    this.props.navigate('/selected-videos', { state: { courseId } });
   }
 
   goBack = () => {
