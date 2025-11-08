@@ -128,25 +128,52 @@ app.post("/login", async (req, res) => {
 /* register api */
 app.post("/register", async (req, res) => {
   try {
+    console.log("Registration request received:", req.body); // Debug log
+
+    // Validation
     if (!req.body || !req.body.username || !req.body.password || !req.body.role) {
-      return res.status(400).json({ errorMessage: 'Username, password, and role are required!', status: false });
+      return res.status(400).json({ 
+        errorMessage: 'Username, password, and role are required!', 
+        status: false 
+      });
     }
 
-    const existingUser = await user.findOne({ username: req.body.username, role: req.body.role });
+    if (!req.body.school || !req.body.course) {
+      return res.status(400).json({ 
+        errorMessage: 'School and course are required!', 
+        status: false 
+      });
+    }
+
+    // Check if user already exists
+    const existingUser = await user.findOne({ 
+      username: req.body.username, 
+      role: req.body.role 
+    });
     
     if (existingUser) { 
-      return res.status(400).json({ errorMessage: `${req.body.role} with username ${req.body.username} already exists!`, status: false });
+      return res.status(400).json({ 
+        errorMessage: `${req.body.role} with username ${req.body.username} already exists!`, 
+        status: false 
+      });
     }
 
+    // Hash password
     const hashedPassword = await bcrypt.hash(req.body.password, 10);
     
+    // Create new user
     let newUser = new user({ 
       username: req.body.username, 
       password: hashedPassword,
-      role: req.body.role
+      role: req.body.role,
+      school: req.body.school,
+      course: req.body.course
     });
     
+    // Save user
     const savedUser = await newUser.save();
+    
+    console.log("User registered successfully:", savedUser.username); // Debug log
     
     res.json({
       message: `${req.body.role} registered successfully!`,
@@ -154,8 +181,11 @@ app.post("/register", async (req, res) => {
     });
     
   } catch (e) { 
-    console.error("Registration Error:", e);
-    return res.status(400).json({ errorMessage: 'Something went wrong!', status: false }); 
+    console.error("Registration Error:", e); // Debug log
+    return res.status(400).json({ 
+      errorMessage: e.message || 'Something went wrong!', 
+      status: false 
+    }); 
   }
 });
 
@@ -439,31 +469,226 @@ app.get("/search-videos/:query", async (req, res) => {
   }
 });
 
-/* Generate class code for teacher */
+/* Generate class code for teacher - PER COURSE */
 app.post("/generate-class-code", async (req, res) => {
   try {
     const teacherId = req.user.id;
+    const courseId = req.body.courseId; // Course ID sent from frontend
     
-    // Generate a 6-character alphanumeric code
+    // Validation: courseId is required
+    if (!courseId) {
+      return res.status(400).json({
+        errorMessage: 'Course ID is required to generate a class code',
+        status: false
+      });
+    }
+    
+    // Step 1: Verify the course exists and belongs to the teacher
+    const courseData = await course.findOne({
+      _id: courseId,
+      user_id: teacherId,
+      is_delete: false
+    });
+    
+    if (!courseData) {
+      return res.status(404).json({
+        errorMessage: 'Course not found or does not belong to this teacher',
+        status: false
+      });
+    }
+    
+    // Step 2: Check if the course already has a classCode
+    if (courseData.classCode) {
+      // If code already exists for this course, return the existing code
+      return res.json({
+        status: true,
+        classCode: courseData.classCode,
+        courseId: courseId,
+        message: 'Class code retrieved successfully (existing code)',
+        isNew: false
+      });
+    }
+    
+    // Step 3: Generate a NEW 6-character alphanumeric code only if one doesn't exist
     const generateCode = () => {
       return Math.random().toString(36).substring(2, 8).toUpperCase();
     };
     
-    const classCode = generateCode();
+    const newClassCode = generateCode();
     
-    // Store the code in the user document
-    await user.findByIdAndUpdate(teacherId, { classCode: classCode });
+    // Step 4: Update the COURSE document with the new classCode
+    const updatedCourse = await course.findByIdAndUpdate(
+      courseId,
+      { classCode: newClassCode },
+      { new: true }
+    );
+    
+    if (!updatedCourse) {
+      return res.status(400).json({
+        errorMessage: 'Failed to generate class code',
+        status: false
+      });
+    }
     
     res.json({
       status: true,
-      classCode: classCode,
-      message: 'Class code generated successfully'
+      classCode: newClassCode,
+      courseId: courseId,
+      message: 'Class code generated successfully',
+      isNew: true
     });
     
   } catch (e) {
     console.error("Generate code error:", e);
     res.status(400).json({
       errorMessage: 'Failed to generate class code',
+      status: false
+    });
+  }
+});
+
+/* API to get all available courses for students */
+app.get("/student/available-courses", async (req, res) => {
+  try {
+    // Get all courses that are not deleted (public courses)
+    const courses = await course.find(
+      { is_delete: false },
+      { 
+        _id: 1,
+        class_name: 1, 
+        subject_name: 1, 
+        unit_title: 1, 
+        resource_type: 1,
+        user_id: 1,
+        date: 1
+      }
+    )
+    .populate('user_id', 'username')
+    .sort({ date: -1 });
+
+    if (!courses || courses.length === 0) {
+      return res.status(400).json({
+        errorMessage: 'No courses available!',
+        status: false
+      });
+    }
+
+    res.status(200).json({
+      status: true,
+      title: 'Available courses retrieved.',
+      courses: courses,
+      total: courses.length
+    });
+
+  } catch (e) {
+    console.error("Fetch courses error:", e);
+    res.status(400).json({
+      errorMessage: 'Something went wrong!',
+      status: false
+    });
+  }
+});
+
+/* API to verify class code and get course details with videos */
+app.post("/student/verify-class-code", async (req, res) => {
+  try {
+    const { courseId, classCode } = req.body;
+    const studentId = req.user.id;
+
+    // Validation
+    if (!courseId || !classCode) {
+      return res.status(400).json({
+        errorMessage: 'Course ID and class code are required!',
+        status: false
+      });
+    }
+
+    // Step 1: Find the course and verify class code
+    const courseData = await course.findOne({
+      _id: courseId,
+      is_delete: false
+    }).populate('user_id', 'username');
+
+    if (!courseData) {
+      return res.status(404).json({
+        errorMessage: 'Course not found!',
+        status: false
+      });
+    }
+
+    // Step 2: Check if class code matches
+    if (!courseData.classCode || courseData.classCode !== classCode) {
+      return res.status(401).json({
+        errorMessage: 'Invalid class code!',
+        status: false
+      });
+    }
+
+    // Step 3: Return course data with teacher info
+    res.status(200).json({
+      status: true,
+      message: 'Class code verified successfully',
+      course: {
+        _id: courseData._id,
+        class_name: courseData.class_name,
+        subject_name: courseData.subject_name,
+        unit_title: courseData.unit_title,
+        resource_type: courseData.resource_type,
+        syllabus_file_path: courseData.syllabus_file_path,
+        syllabus_text: courseData.syllabus_text,
+        topics: courseData.topics,
+        teacher: courseData.user_id?.username,
+        teacherId: courseData.user_id?._id
+      }
+    });
+
+  } catch (e) {
+    console.error("Verify code error:", e);
+    res.status(400).json({
+      errorMessage: 'Something went wrong!',
+      status: false
+    });
+  }
+});
+
+/* API to store student course enrollment */
+app.post("/student/enroll-course", async (req, res) => {
+  try {
+    const { courseId } = req.body;
+    const studentId = req.user.id;
+
+    if (!courseId) {
+      return res.status(400).json({
+        errorMessage: 'Course ID is required!',
+        status: false
+      });
+    }
+
+    // Verify course exists
+    const courseData = await course.findOne({
+      _id: courseId,
+      is_delete: false
+    });
+
+    if (!courseData) {
+      return res.status(404).json({
+        errorMessage: 'Course not found!',
+        status: false
+      });
+    }
+
+    // Store enrollment in user's enrolled courses (you may need to add this to user schema)
+    // For now, we'll just confirm the enrollment
+    res.status(200).json({
+      status: true,
+      message: 'Successfully enrolled in course',
+      courseId: courseId
+    });
+
+  } catch (e) {
+    console.error("Enrollment error:", e);
+    res.status(400).json({
+      errorMessage: 'Failed to enroll in course',
       status: false
     });
   }
