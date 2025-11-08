@@ -1,5 +1,5 @@
 import React, { Component } from 'react';
-import { Button, Card, CardContent, Typography, Grid, Divider, Dialog, DialogTitle, DialogContent, DialogActions } from '@material-ui/core';
+import { Button, Card, CardContent, Typography, Grid, Divider, Dialog, DialogTitle, DialogContent, DialogActions, CircularProgress } from '@material-ui/core';
 import { withRouter } from "./utils";
 import axios from 'axios';
 import swal from 'sweetalert';
@@ -11,24 +11,42 @@ class SelectedVideos extends Component {
       selectedVideos: JSON.parse(localStorage.getItem('selectedVideos') || '[]'),
       showClassCodeDialog: false,
       generatedCode: '',
-      token: localStorage.getItem("token")
+      token: localStorage.getItem("token"),
+      loadingCode: false,
+      courseId: props.location?.state?.courseId || localStorage.getItem('currentCourseId')
     };
   }
 
   handleGenerateCode = () => {
-    axios.post('http://localhost:2000/generate-class-code', {}, {
-      headers: {
-        'Content-Type': 'application/json',
-        token: this.state.token
+    // Validate courseId exists
+    if (!this.state.courseId) {
+      swal({
+        text: "Course ID is missing. Please select a course first.",
+        icon: "error"
+      });
+      return;
+    }
+
+    this.setState({ loadingCode: true });
+    
+    axios.post('http://localhost:2000/generate-class-code', 
+      { courseId: this.state.courseId }, // Send courseId in request body
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          token: this.state.token
+        }
       }
-    })
+    )
     .then((res) => {
       this.setState({
         showClassCodeDialog: true,
-        generatedCode: res.data.classCode
+        generatedCode: res.data.classCode,
+        loadingCode: false
       });
     })
     .catch((err) => {
+      this.setState({ loadingCode: false });
       swal({
         text: err.response?.data?.errorMessage || "Failed to generate code",
         icon: "error"
@@ -38,6 +56,15 @@ class SelectedVideos extends Component {
 
   handleCloseCodeDialog = () => {
     this.setState({ showClassCodeDialog: false });
+  };
+
+  copyCodeToClipboard = () => {
+    navigator.clipboard.writeText(this.state.generatedCode);
+    swal({
+      text: "Class code copied to clipboard!",
+      icon: "success",
+      timer: 2000
+    });
   };
 
   groupVideosByTopic = () => {
@@ -58,8 +85,22 @@ class SelectedVideos extends Component {
   };
 
   clearAll = () => {
-    localStorage.removeItem('selectedVideos');
-    this.setState({ selectedVideos: [] });
+    swal({
+      title: "Are you sure?",
+      text: "This will clear all selected videos",
+      icon: "warning",
+      buttons: true,
+      dangerMode: true,
+    })
+    .then((willDelete) => {
+      if (willDelete) {
+        localStorage.removeItem('selectedVideos');
+        this.setState({ selectedVideos: [] });
+        swal("All videos cleared!", {
+          icon: "success",
+        });
+      }
+    });
   };
 
   goBack = () => {
@@ -72,17 +113,18 @@ class SelectedVideos extends Component {
 
     return (
       <div style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
           <Button variant="outlined" onClick={this.goBack}>
             ← Back
           </Button>
-          <div style={{ display: 'flex', gap: '10px' }}>
+          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
             <Button 
               variant="contained" 
               style={{ backgroundColor: '#4caf50', color: 'white' }}
               onClick={this.handleGenerateCode}
+              disabled={this.state.loadingCode}
             >
-              Generate Class Code
+              {this.state.loadingCode ? <CircularProgress size={24} color="inherit" /> : 'Generate Class Code'}
             </Button>
             <Button variant="contained" color="secondary" onClick={this.clearAll}>
               Clear All
@@ -113,9 +155,9 @@ class SelectedVideos extends Component {
                           <img 
                             src={video.thumbnail} 
                             alt={video.title}
-                            style={{ width: '100%', height: '120px', objectFit: 'cover' }}
+                            style={{ width: '100%', height: '120px', objectFit: 'cover', borderRadius: '4px' }}
                           />
-                          <Typography variant="subtitle2" style={{ marginTop: '8px' }}>
+                          <Typography variant="subtitle2" style={{ marginTop: '8px', minHeight: '40px' }}>
                             {video.title}
                           </Typography>
                           <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
@@ -167,13 +209,21 @@ class SelectedVideos extends Component {
                 backgroundColor: '#f5f5f5',
                 fontWeight: 'bold',
                 letterSpacing: '4px',
-                marginTop: '10px'
+                marginTop: '10px',
+                cursor: 'pointer',
+                borderRadius: '4px',
+                userSelect: 'all'
               }}
+              onClick={this.copyCodeToClipboard}
+              title="Click to copy"
             >
               {this.state.generatedCode}
             </Typography>
             <Typography variant="caption" color="textSecondary" style={{ marginTop: '15px', display: 'block', textAlign: 'center' }}>
               Students will use this code to access all your selected videos and course materials.
+            </Typography>
+            <Typography variant="caption" style={{ marginTop: '8px', display: 'block', textAlign: 'center', color: '#888' }}>
+              (Click the code to copy it to clipboard)
             </Typography>
           </DialogContent>
           <DialogActions>
