@@ -1,26 +1,37 @@
 var mongoose = require('mongoose');
 var Schema = mongoose.Schema;
 
-// Define the schema with topics field and classCode
 const courseSchema = new Schema({
     class_name: String,
     subject_name: String,
     unit_title: String,
-    user_id: Schema.ObjectId,
+    user_id: Schema.ObjectId, // Creator of the course
     resource_type: String,
     syllabus_file_path: String,
     syllabus_text: String,
-    // NEW: Add topics array for subtopics
     topics: [{
         topic_name: String,
         description: String,
-        keywords: [String] // For YouTube search
+        keywords: [String]
     }],
-    // NEW: Add classCode field - stores unique code per course
     classCode: {
         type: String,
         default: null,
-        sparse: true // Allows multiple null values (courses without codes)
+        sparse: true
+    },
+    // Lock feature fields
+    isLocked: {
+        type: Boolean,
+        default: false
+    },
+    lockedBy: {
+        type: Schema.ObjectId,
+        default: null,
+        ref: 'User'
+    },
+    lockedAt: {
+        type: Date,
+        default: null
     },
     is_delete: { 
         type: Boolean, 
