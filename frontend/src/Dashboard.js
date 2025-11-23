@@ -10,7 +10,13 @@ class Dashboard extends Component {
     super();
     this.state = {
       token: '',
+      userId: '',
       openCourseModal: false,
+      openLockModal: false,
+      selectedCourseForLock: null,
+      collaboratorEmail: '',
+      collaborators: [],
+      loadingCollaborators: false,
       class_name: '',
       subject_name: '',
       unit_title: '',
@@ -28,7 +34,6 @@ class Dashboard extends Component {
         activeCourses: 0,
         resourcesAdded: 27
       },
-      // New states for dropdown functionality
       showCustomSchool: false,
       showCustomCourse: false,
       showCustomSemester: false,
@@ -38,16 +43,18 @@ class Dashboard extends Component {
       selectedSemester: '',
       availableCourses: [],
       availableSemesters: [],
-      availableSubjects: []
+      availableSubjects: [],
+      usedSubjects: []
     };
   }
 
   componentDidMount() {
     let token = localStorage.getItem("token");
+    let userId = localStorage.getItem("userId");
     if (!token) {
       this.props.navigate("/login");
     } else {
-      this.setState({ token: token }, () => {
+      this.setState({ token: token, userId: userId }, () => {
         this.getCourseData();
       });
     }
@@ -66,7 +73,12 @@ class Dashboard extends Component {
     .then((res) => {
       this.setState({
         loading: false,
-        courses: res.data.courses,
+        courses: res.data.courses.map(c => ({ 
+            ...c, 
+            lockedBy: c.lockedBy ? String(c.lockedBy) : null,
+            user_id: String(c.user_id),
+            collaborators: c.collaborators || []
+        })), 
         pages: res.data.pages,
         stats: {
           ...this.state.stats,
@@ -83,7 +95,206 @@ class Dashboard extends Component {
     });
   };
 
-  deleteCourse = (id) => {
+  checkUsedSubjects = (semester) => {
+    axios.get(`http://localhost:2000/get-used-subjects/${encodeURIComponent(semester)}`, {
+      headers: { token: this.state.token }
+    })
+    .then((res) => {
+      this.setState({ usedSubjects: res.data.usedSubjects || [] });
+    })
+    .catch((err) => {
+      console.error("Error fetching used subjects:", err);
+      this.setState({ usedSubjects: [] });
+    });
+  };
+
+  handleLockClick = (course) => {
+    const { userId } = this.state;
+    
+    if (String(course.user_id) !== String(userId)) {
+      swal({
+        text: "Only the course creator can manage lock settings.",
+        icon: "warning"
+      });
+      return;
+    }
+
+    if (course.isLocked) {
+      this.setState({ 
+        selectedCourseForLock: course,
+        openLockModal: true 
+      }, () => {
+        this.loadCollaborators(course._id);
+      });
+    } else {
+      this.lockCourse(course._id);
+    }
+  };
+
+  lockCourse = (courseId) => {
+    swal({
+      title: "Lock Course for All Teachers?",
+      text: "Only you and invited collaborators will be able to edit this course.",
+      icon: "info",
+      buttons: {
+        cancel: "Cancel",
+        confirm: "Lock Course"
+      },
+    })
+    .then((willLock) => {
+      if (willLock) {
+        axios.post("http://localhost:2000/toggle-course-lock", 
+          { courseId: courseId, action: 'lock' }, 
+          { headers: { "Content-Type": "application/json", token: this.state.token }}
+        )
+        .then((res) => {
+          swal({ 
+            text: res.data.title, 
+            icon: "success",
+            timer: 2000
+          });
+          this.getCourseData();
+        })
+        .catch((err) => {
+          swal({ 
+            text: err.response?.data?.errorMessage || "Failed to lock course", 
+            icon: "error" 
+          });
+        });
+      }
+    });
+  };
+
+  unlockCourse = () => {
+    const { selectedCourseForLock } = this.state;
+    
+    swal({
+      title: "Unlock Course?",
+      text: "All teachers from your school will be able to edit this course.",
+      icon: "warning",
+      buttons: {
+        cancel: "Cancel",
+        confirm: "Unlock"
+      },
+      dangerMode: true,
+    })
+    .then((willUnlock) => {
+      if (willUnlock) {
+        axios.post("http://localhost:2000/toggle-course-lock", 
+          { courseId: selectedCourseForLock._id, action: 'unlock' }, 
+          { headers: { "Content-Type": "application/json", token: this.state.token }}
+        )
+        .then((res) => {
+          swal({ 
+            text: res.data.title, 
+            icon: "success",
+            timer: 2000
+          });
+          this.setState({ openLockModal: false, selectedCourseForLock: null });
+          this.getCourseData();
+        })
+        .catch((err) => {
+          swal({ 
+            text: err.response?.data?.errorMessage || "Failed to unlock course", 
+            icon: "error" 
+          });
+        });
+      }
+    });
+  };
+
+  loadCollaborators = (courseId) => {
+    this.setState({ loadingCollaborators: true });
+    
+    axios.get(`http://localhost:2000/get-collaborators/${courseId}`, {
+      headers: { token: this.state.token }
+    })
+    .then((res) => {
+      this.setState({ 
+        collaborators: res.data.collaborators || [],
+        loadingCollaborators: false 
+      });
+    })
+    .catch((err) => {
+      console.error("Load collaborators error:", err);
+      this.setState({ loadingCollaborators: false });
+    });
+  };
+
+  addCollaborator = () => {
+    const { selectedCourseForLock, collaboratorEmail } = this.state;
+    
+    if (!collaboratorEmail.trim()) {
+      swal({ text: 'Please enter a teacher email', icon: 'warning' });
+      return;
+    }
+
+    axios.post("http://localhost:2000/add-collaborator", 
+      { courseId: selectedCourseForLock._id, collaboratorEmail: collaboratorEmail.trim() }, 
+      { headers: { "Content-Type": "application/json", token: this.state.token }}
+    )
+    .then((res) => {
+      swal({ 
+        text: res.data.title, 
+        icon: "success",
+        timer: 2000
+      });
+      this.setState({ collaboratorEmail: '' });
+      this.loadCollaborators(selectedCourseForLock._id);
+    })
+    .catch((err) => {
+      swal({ 
+        text: err.response?.data?.errorMessage || "Failed to add collaborator", 
+        icon: "error" 
+      });
+    });
+  };
+
+  removeCollaborator = (collaboratorId) => {
+    const { selectedCourseForLock } = this.state;
+    
+    swal({
+      title: "Remove Collaborator?",
+      text: "This teacher will no longer be able to edit the course.",
+      icon: "warning",
+      buttons: true,
+      dangerMode: true,
+    })
+    .then((willRemove) => {
+      if (willRemove) {
+        axios.post("http://localhost:2000/remove-collaborator", 
+          { courseId: selectedCourseForLock._id, collaboratorId: collaboratorId }, 
+          { headers: { "Content-Type": "application/json", token: this.state.token }}
+        )
+        .then((res) => {
+          swal({ 
+            text: res.data.title, 
+            icon: "success",
+            timer: 2000
+          });
+          this.loadCollaborators(selectedCourseForLock._id);
+        })
+        .catch((err) => {
+          swal({ 
+            text: err.response?.data?.errorMessage || "Failed to remove collaborator", 
+            icon: "error" 
+          });
+        });
+      }
+    });
+  };
+
+  deleteCourse = (id, courseCreatorId) => {
+    const { userId } = this.state;
+    
+    if (String(courseCreatorId) !== String(userId)) {
+      swal({
+        text: "Only the course creator can delete this course.",
+        icon: "warning"
+      });
+      return;
+    }
+
     swal({
       title: "Are you sure?",
       text: "Once deleted, you will not be able to recover this course!",
@@ -105,6 +316,22 @@ class Dashboard extends Component {
         });
       }
     });
+  };
+
+  viewCourse = (courseId, isLocked, courseCreatorId, collaborators) => {
+    const { userId } = this.state;
+    
+    const isCourseCreator = String(courseCreatorId) === String(userId);
+    const isCollaborator = collaborators && collaborators.some(
+      collab => String(collab) === String(userId)
+    );
+    
+    const canEdit = isCourseCreator || isCollaborator || !isLocked;
+    
+    localStorage.setItem('canEditCourse', canEdit);
+    localStorage.setItem('isCourseCreator', isCourseCreator);
+    
+    this.props.navigate(`/course-detail/${courseId}`);
   };
 
   addCourse = () => {
@@ -160,12 +387,23 @@ class Dashboard extends Component {
       selectedSemester: '',
       availableCourses: [],
       availableSemesters: [],
-      availableSubjects: []
+      availableSubjects: [],
+      usedSubjects: []
+    });
+  };
+
+  closeLockModal = () => {
+    this.setState({
+      openLockModal: false,
+      selectedCourseForLock: null,
+      collaboratorEmail: '',
+      collaborators: []
     });
   };
 
   logOut = () => {
     localStorage.setItem('token', null);
+    localStorage.setItem('userId', null);
     this.props.navigate("/");
   };
 
@@ -185,7 +423,8 @@ class Dashboard extends Component {
         subject_name: '',
         showCustomCourse: false,
         showCustomSemester: false,
-        showCustomSubject: false
+        showCustomSubject: false,
+        usedSubjects: []
       });
     } else {
       const schoolObj = semesterData.find(s => s.school === value);
@@ -201,7 +440,8 @@ class Dashboard extends Component {
         subject_name: '',
         showCustomCourse: false,
         showCustomSemester: false,
-        showCustomSubject: false
+        showCustomSubject: false,
+        usedSubjects: []
       });
     }
   };
@@ -219,7 +459,8 @@ class Dashboard extends Component {
         class_name: '',
         subject_name: '',
         showCustomSemester: false,
-        showCustomSubject: false
+        showCustomSubject: false,
+        usedSubjects: []
       });
     } else {
       const courseObj = this.state.availableCourses.find(c => c.courseName === value);
@@ -232,7 +473,8 @@ class Dashboard extends Component {
         class_name: '',
         subject_name: '',
         showCustomSemester: false,
-        showCustomSubject: false
+        showCustomSubject: false,
+        usedSubjects: []
       });
     }
   };
@@ -247,7 +489,8 @@ class Dashboard extends Component {
         selectedSemester: '',
         availableSubjects: [],
         subject_name: '',
-        showCustomSubject: false
+        showCustomSubject: false,
+        usedSubjects: []
       });
     } else {
       const semesterObj = this.state.availableSemesters.find(s => s.semester === value);
@@ -258,6 +501,8 @@ class Dashboard extends Component {
         availableSubjects: semesterObj ? semesterObj.subjects : [],
         subject_name: '',
         showCustomSubject: false
+      }, () => {
+        this.checkUsedSubjects(value);
       });
     }
   };
@@ -297,10 +542,12 @@ class Dashboard extends Component {
 
   render() {
     const { 
-      courses, loading, openCourseModal, stats, search, 
+      courses, loading, openCourseModal, openLockModal, stats, search, userId,
       showCustomSchool, showCustomCourse, showCustomSemester, showCustomSubject, 
       selectedSchool, selectedCourse, selectedSemester, 
-      availableCourses, availableSemesters, availableSubjects 
+      availableCourses, availableSemesters, availableSubjects,
+      selectedCourseForLock, collaboratorEmail, collaborators, loadingCollaborators,
+      usedSubjects
     } = this.state;
 
     return (
@@ -338,13 +585,14 @@ class Dashboard extends Component {
         </header>
 
         <main className="dashboard-main">
-          {/* Welcome Section */}
           <div className="welcome-section">
-            <h2 className="welcome-title">Welcome Back, Teacher 👋</h2>
+            <h2 className="welcome-title">
+              Welcome Back, Teacher{' '}
+              <span role="img" aria-label="waving hand">👋</span>
+            </h2>
             <p className="welcome-subtitle">Manage your courses and help students access syllabus-aligned resources.</p>
           </div>
 
-          {/* Stats Grid */}
           <div className="stats-grid">
             <div className="stat-card">
               <div className="stat-icon blue-icon">
@@ -383,7 +631,6 @@ class Dashboard extends Component {
             </div>
           </div>
 
-          {/* Course Management Section */}
           <div className="course-section">
             <div className="course-header">
               <div className="course-header-left">
@@ -424,36 +671,100 @@ class Dashboard extends Component {
                       <th>Subject</th>
                       <th>Unit</th>
                       <th>Syllabus</th>
+                      <th>Status</th>
                       <th>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {courses.map((row) => (
-                      <tr key={row._id}>
-                        <td>{row.class_name}</td>
-                        <td>{row.subject_name}</td>
-                        <td>{row.unit_title}</td>
-                        <td>
-                          {row.resource_type === 'File' ? (
-                            <a href={`http://localhost:2000/${row.syllabus_file_path}`} target="_blank" rel="noopener noreferrer" className="file-link">
-                              View File
-                            </a>
-                          ) : (
-                            <span className="text-preview">{row.syllabus_text?.substring(0, 30)}...</span>
-                          )}
-                        </td>
-                        <td>
-                          <div className="action-buttons">
-                            <button onClick={() => this.props.navigate(`/course-detail/${row._id}`)} className="btn-view">
-                              View
-                            </button>
-                            <button onClick={() => this.deleteCourse(row._id)} className="btn-delete">
-                              Delete
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                    {courses.map((row) => {
+                      const isCourseCreator = String(row.user_id) === String(userId);
+                      const isCollaborator = row.collaborators && row.collaborators.some(
+                        collab => String(collab) === String(userId)
+                      );
+                      const canEdit = isCourseCreator || isCollaborator || !row.isLocked;
+                      
+                      return (
+                        <tr key={row._id} className={row.isLocked && !canEdit ? 'locked-row' : ''}>
+                          <td>{row.class_name}</td>
+                          <td>{row.subject_name}</td>
+                          <td>{row.unit_title}</td>
+                          <td>
+                            {row.resource_type === 'File' ? (
+                              <a href={`http://localhost:2000/${row.syllabus_file_path}`} target="_blank" rel="noopener noreferrer" className="file-link">
+                                View File
+                              </a>
+                            ) : (
+                              <span className="text-preview">{row.syllabus_text?.substring(0, 30)}...</span>
+                            )}
+                          </td>
+                          <td>
+                            <div className="lock-status">
+                              {isCourseCreator ? (
+                                <span className="lock-badge creator-badge">
+                                  {row.isLocked ? 'Locked by You' : 'Creator'}
+                                </span>
+                              ) : isCollaborator ? (
+                                <span className="lock-badge collaborator-badge">
+                                  Collaborator
+                                </span>
+                              ) : (
+                                <>
+                                  {row.isLocked ? (
+                                    <span className="lock-badge locked-by-other">
+                                      Locked (View Only)
+                                    </span>
+                                  ) : (
+                                    <span className="lock-badge unlocked">
+                                      Can Edit
+                                    </span>
+                                  )}
+                                </>
+                              )}
+                            </div>
+                          </td>
+                          <td>
+                            <div className="action-buttons">
+                              <button 
+                                onClick={() => this.viewCourse(row._id, row.isLocked, row.user_id, row.collaborators)} 
+                                className="btn-view"
+                                title="View Course"
+                              >
+                                View
+                              </button>
+                              
+                              {isCourseCreator && (
+                                <button 
+                                  onClick={() => this.handleLockClick(row)} 
+                                  className={`btn-lock ${row.isLocked ? 'locked' : ''}`}
+                                  title={row.isLocked ? 'Manage Access & Unlock' : 'Lock for All Teachers'}
+                                >
+                                  <svg width="16" height="16" fill="currentColor" viewBox="0 0 20 20">
+                                    {row.isLocked ? (
+                                      <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                                    ) : (
+                                      <path d="M10 2a5 5 0 00-5 5v2a2 2 0 00-2 2v5a2 2 0 002 2h10a2 2 0 002-2v-5a2 2 0 00-2-2H7V7a3 3 0 015.905-.75 1 1 0 001.937-.5A5.002 5.002 0 0010 2z" />
+                                    )}
+                                  </svg>
+                                </button>
+                              )}
+                              
+                              <button 
+                                onClick={() => this.deleteCourse(row._id, row.user_id)} 
+                                className="btn-delete"
+                                disabled={!isCourseCreator}
+                                title={!isCourseCreator ? 'Only creator can delete' : 'Delete Course'}
+                                style={{
+                                  opacity: !isCourseCreator ? 0.5 : 1,
+                                  cursor: !isCourseCreator ? 'not-allowed' : 'pointer'
+                                }}
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -468,7 +779,6 @@ class Dashboard extends Component {
               <h3 className="modal-title">Add New Course</h3>
               
               <div className="modal-form">
-                {/* School Dropdown */}
                 <select
                   name="school_dropdown"
                   value={showCustomSchool ? 'custom' : selectedSchool}
@@ -484,7 +794,6 @@ class Dashboard extends Component {
                   <option value="custom">+ Add Custom School</option>
                 </select>
 
-                {/* Custom School Input */}
                 {showCustomSchool && (
                   <input
                     type="text"
@@ -494,7 +803,6 @@ class Dashboard extends Component {
                   />
                 )}
 
-                {/* Course Name Dropdown - Only show if school is selected */}
                 {(selectedSchool || showCustomSchool) && (
                   <>
                     {!showCustomSchool && availableCourses.length > 0 && (
@@ -514,7 +822,6 @@ class Dashboard extends Component {
                       </select>
                     )}
 
-                    {/* Custom Course Input */}
                     {(showCustomCourse || showCustomSchool) && (
                       <input
                         type="text"
@@ -526,7 +833,6 @@ class Dashboard extends Component {
                   </>
                 )}
 
-                {/* Semester Dropdown - Only show if course is selected */}
                 {(selectedCourse || showCustomCourse || showCustomSchool) && (
                   <>
                     {!showCustomCourse && !showCustomSchool && availableSemesters.length > 0 && (
@@ -546,7 +852,6 @@ class Dashboard extends Component {
                       </select>
                     )}
 
-                    {/* Custom Semester Input */}
                     {(showCustomSemester || showCustomCourse || showCustomSchool) && (
                       <input
                         type="text"
@@ -560,7 +865,6 @@ class Dashboard extends Component {
                   </>
                 )}
                 
-                {/* Subject Dropdown - Only show if semester is selected */}
                 {(selectedSemester || showCustomSemester || showCustomCourse || showCustomSchool) && (
                   <>
                     {!showCustomSemester && !showCustomCourse && !showCustomSchool && availableSubjects.length > 0 && (
@@ -571,16 +875,23 @@ class Dashboard extends Component {
                         className="form-select"
                       >
                         <option value="">Select Subject</option>
-                        {availableSubjects.map((subject, index) => (
-                          <option key={index} value={subject}>
-                            {subject}
-                          </option>
-                        ))}
+                        {availableSubjects.map((subject, index) => {
+                          const isUsed = usedSubjects.includes(subject);
+                          return (
+                            <option 
+                              key={index} 
+                              value={subject}
+                              disabled={isUsed}
+                              style={{ color: isUsed ? '#999' : 'inherit' }}
+                            >
+                              {subject} {isUsed ? '(Already Added)' : ''}
+                            </option>
+                          );
+                        })}
                         <option value="custom">+ Add Custom Subject</option>
                       </select>
                     )}
 
-                    {/* Custom Subject Input */}
                     {(showCustomSubject || showCustomSemester || showCustomCourse || showCustomSchool) && (
                       <input
                         type="text"
@@ -642,6 +953,96 @@ class Dashboard extends Component {
                   className="btn-submit"
                 >
                   Add Course
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Lock Management Modal */}
+        {openLockModal && selectedCourseForLock && (
+          <div className="modal-overlay" onClick={this.closeLockModal}>
+            <div className="modal-content lock-modal" onClick={(e) => e.stopPropagation()}>
+              <h3 className="modal-title">Manage Course Access</h3>
+              <p className="modal-subtitle">
+                {selectedCourseForLock.subject_name} - {selectedCourseForLock.unit_title}
+              </p>
+              
+              <div className="lock-modal-body">
+                <div className="unlock-section">
+                  <h4 className="section-heading">Course Status</h4>
+                  <div className="status-card locked">
+                    <svg width="20" height="20" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                    </svg>
+                    <div>
+                      <p className="status-text">This course is currently locked</p>
+                      <p className="status-subtext">Only you and invited collaborators can edit</p>
+                    </div>
+                  </div>
+                  <button onClick={this.unlockCourse} className="btn-unlock">
+                    <svg width="16" height="16" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M10 2a5 5 0 00-5 5v2a2 2 0 00-2 2v5a2 2 0 002 2h10a2 2 0 002-2v-5a2 2 0 00-2-2H7V7a3 3 0 015.905-.75 1 1 0 001.937-.5A5.002 5.002 0 0010 2z" />
+                    </svg>
+                    Unlock for Everyone
+                  </button>
+                </div>
+
+                <div className="collaborators-section">
+                  <h4 className="section-heading">Invite Collaborators</h4>
+                  <p className="section-description">Add teachers who can edit this course</p>
+                  
+                  <div className="add-collaborator-form">
+                    <input
+                      type="email"
+                      placeholder="Enter teacher email (username)"
+                      value={collaboratorEmail}
+                      onChange={(e) => this.setState({ collaboratorEmail: e.target.value })}
+                      className="form-input"
+                    />
+                    <button onClick={this.addCollaborator} className="btn-add-collab">
+                      <svg width="16" height="16" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clipRule="evenodd" />
+                      </svg>
+                      Add
+                    </button>
+                  </div>
+
+                  <div className="collaborators-list">
+                    {loadingCollaborators ? (
+                      <div className="loading-collaborators">
+                        <div className="spinner-small"></div>
+                      </div>
+                    ) : collaborators.length > 0 ? (
+                      <>
+                        <p className="list-heading">Current Collaborators ({collaborators.length})</p>
+                        {collaborators.map((collab) => (
+                          <div key={collab._id} className="collaborator-item">
+                            <div className="collab-info">
+                              <div className="collab-avatar">{collab.username.charAt(0).toUpperCase()}</div>
+                              <span className="collab-name">{collab.username}</span>
+                            </div>
+                            <button 
+                              onClick={() => this.removeCollaborator(collab._id)}
+                              className="btn-remove-collab"
+                            >
+                              <svg width="16" height="16" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                              </svg>
+                            </button>
+                          </div>
+                        ))}
+                      </>
+                    ) : (
+                      <p className="no-collaborators">No collaborators added yet</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="modal-actions">
+                <button onClick={this.closeLockModal} className="btn-cancel">
+                  Close
                 </button>
               </div>
             </div>
