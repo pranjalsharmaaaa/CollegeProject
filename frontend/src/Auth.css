@@ -320,3 +320,66 @@
     gap: 0.875rem;
   }
 }
+
+/* --- Validation and Specific Element Styles (New Block) --- */
+
+/* Error input styling */
+.error-input {
+  border-color: #ef4444 !important;
+  background-color: #fef2f2;
+}
+
+.error-input:focus {
+  border-color: #dc2626 !important;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+}
+
+/* Error text */
+.error-text {
+  display: block;
+  color: #dc2626;
+  font-size: 12px;
+  margin-top: 4px;
+  font-weight: 500;
+}
+
+/* Success text */
+.success-text {
+  display: block;
+  color: #10b981;
+  font-size: 12px;
+  margin-top: 4px;
+  font-weight: 500;
+}
+
+/* OTP input field specific styling */
+input[name="otp"] {
+  letter-spacing: 8px;
+  font-size: 18px;
+  font-weight: 600;
+  text-align: center;
+}
+
+/* Button in disabled state (Overriding general .submit-btn:disabled) */
+.submit-btn:disabled {
+  background-color: #9ca3af;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* Verified badge */
+.verified-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #10b981;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* Timer text */
+.timer-text {
+  font-size: 12px;
+  color: #6b7280;
+  margin-top: 4px;
+}
